@@ -8,21 +8,84 @@ import tornado.web
 import tornado.httpserver
 import tornado.httpclient
 
+from motor.motor_tornado import MotorClient
+
 from dotenv import load_dotenv
 
 class BaseHandler(tornado.web.RequestHandler):
-    pass
+    client = ""
     
-class IndexPage(BaseHandler):
+class Index(BaseHandler):
     def get(self):
-        self.write({'message': 'Hello World!'})
+        resp = {
+            "success": True,
+            "message": "Clipboard API Root. https://clipboard-app.netlify.app",
+            "data": {}
+        }
+        self.write(resp)
 
+class Clipboard(BaseHandler):
+    def get(self, clipboard_id):
+
+        try:
+            EMPTY_CLIPBOARD = {'clipboard_id': clipboard_id, 'items': []}
+
+            clipboard = "get_clipboard"
+            if not clipboard:
+                clipboard = EMPTY_CLIPBOARD
+            
+            resp = {
+                'success': True,
+                'message': f'Opened clipboard {clipboard_id}',
+                'data': clipboard
+            }
+            return self.write(resp)
+        except:
+            resp = {
+                'success': False,
+                'message': 'Failed to open clipboard',
+                'errors': [
+                    {'message': 'Server error'}
+                ]
+            }
+    
+    def delete(self, clipboard_id):
+        
+        try: 
+            delete_clipboard = True
+            if delete_clipboard:
+                resp = {
+                    'succss': True,
+                    'message': f'Deleted clipboard {clipboard_id}',
+                }
+                return self.write(resp)
+            else:
+                resp = {
+                    'success': False,
+                    'message': 'Failed to delete clipboard'
+                }
+                return self.write(resp)
+        except:
+            resp = {
+                'success': False,
+                'message': 'Failed to delete clipboard'
+            }
+            return self.write(resp)
+
+class Item(BaseHandler):
+    def post(self, clipboard_id, item_id):
+        pass
+
+    def delete(self, clipboard_id, item_id):
+        pass
 
 from tornado.options import define
 define("port", default=3300, type=int)
 
 handlers = [
-    (r"/", IndexPage),
+    (r"/", Index),
+    (r"/clipboard/([0-9a-z]+)", Clipboard),
+    (r"/clipboard/([0-9a-z]+)/items/([0-9a-z]+)", Item)
 ]
 
 load_dotenv()
