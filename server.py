@@ -11,9 +11,12 @@ import tornado.httpclient
 from motor.motor_tornado import MotorClient
 
 from dotenv import load_dotenv
+load_dotenv()
 
 class BaseHandler(tornado.web.RequestHandler):
-    client = ""
+    client = MotorClient(os.getenv('MONGO_URI'))
+    database = client['clipboard-app']
+    clipboards = database['clipboards']
     
 class Index(BaseHandler):
     def get(self):
@@ -25,22 +28,40 @@ class Index(BaseHandler):
         self.write(resp)
 
 class Clipboard(BaseHandler):
-    def get(self, clipboard_id):
+    async def get(self, clipboard_id):
 
         try:
-            EMPTY_CLIPBOARD = {'clipboard_id': clipboard_id, 'items': []}
+            cursor = self.clipboards.find({'clipboard_id': clipboard_id})
+            result = await cursor.to_list(None)
+            if result:
+                selected = result[0]
+                clipboard = {
+                    'clipboard_id': selected['clipboard_id'],
+                    'items': selected['items']
+                }
 
-            clipboard = "get_clipboard"
-            if not clipboard:
-                clipboard = EMPTY_CLIPBOARD
+                resp = {
+                    'success': True,
+                    'message': f'Opened clipboard {clipboard_id}',
+                    'data': clipboard
+                }
+                return self.write(resp)
+            else:
+                print('creating new')
+                result = await self.clipboards.insert_one(
+                    {'clipboard_id': clipboard_id, 'items': []}
+                )
+                clipboard = {'clipboard_id': clipboard_id, 'items': []}
+
+                resp = {
+                    'success': True,
+                    'message': f'Opened clipboard {clipboard_id}',
+                    'data': clipboard
+                }
+                return self.write(resp)
             
-            resp = {
-                'success': True,
-                'message': f'Opened clipboard {clipboard_id}',
-                'data': clipboard
-            }
-            return self.write(resp)
         except:
+            # raise
             resp = {
                 'success': False,
                 'message': 'Failed to open clipboard',
@@ -48,12 +69,13 @@ class Clipboard(BaseHandler):
                     {'message': 'Server error'}
                 ]
             }
+            self.write(resp)
     
-    def delete(self, clipboard_id):
+    async def delete(self, clipboard_id):
         
         try: 
-            delete_clipboard = True
-            if delete_clipboard:
+            result = await self.clipboards.delete_one({'clipboard_id': clipboard_id})
+            if result.deleted_count:
                 resp = {
                     'succss': True,
                     'message': f'Deleted clipboard {clipboard_id}',
@@ -62,22 +84,130 @@ class Clipboard(BaseHandler):
             else:
                 resp = {
                     'success': False,
-                    'message': 'Failed to delete clipboard'
+                    'message': 'Failed to delete clipboard',
+                    'errors': [
+                        {
+                            'message': f'Clipboard does not exist'
+                        }
+                    ]
                 }
                 return self.write(resp)
         except:
             resp = {
                 'success': False,
-                'message': 'Failed to delete clipboard'
+                'message': 'Failed to delete clipboard',
+                'errors': [
+                    {
+                        'message': 'Server error'
+                    }
+                ]
             }
             return self.write(resp)
 
 class Item(BaseHandler):
-    def post(self, clipboard_id, item_id):
-        pass
+    async def post(self, clipboard_id, item_id=None):
+        
+        try:
+            data = json.loads(self.request.body)
+            item = {
+                'id': data['id'],
+                'content': data['content']
+            }
 
-    def delete(self, clipboard_id, item_id):
-        pass
+            result = await self.clipboards.update_one(
+                {'clipboard_id': clipboard_id},
+                {'$push': {'items': item}}
+            )
+            if not result.modified_count:
+                resp = {
+                    'success': False,
+                    'message': 'Failed to add item to clipboard',
+                    'errors': [
+                        {
+                            'message': 'Clipboard identifier is invalid'
+                        }
+                    ]
+                }
+                return self.write(resp)
+            else:
+                resp = {
+                    'success': True,
+                    'message': 'Item added to clipboard',
+                }
+                return self.write(resp)
+
+        except json.JSONDecodeError:
+            resp = {
+                'success': False,
+                'message': 'Failed to add item to clipboard',
+                'errors': [
+                    {
+                        'message': 'Failed to parse request data'
+                    }
+                ]
+            }
+            return self.write(resp)
+
+        except:
+            resp = {
+                'success': False,
+                'message': 'Failed to add item to clipboard',
+                'errors': [
+                    {
+                        'message': 'Server error'
+                    }
+                ]
+            }
+            return self.write(resp)
+
+    async def delete(self, clipboard_id, item_id):
+        if not item_id:
+            resp = {
+                'success': False,
+                'message': 'Item ID not specified',
+                'errors': [
+                    {
+                        'message': 'ID of item to be deleted must be provided'
+                    }
+                ]
+            }
+            return self.write(resp)
+        
+        try:
+            result = await self.clipboards.update_one(
+                {'clipboard_id': clipboard_id},
+                {'$pull': {'items': {'id': item_id}}}
+            )
+            if not result.modified_count:
+                # the problem here could have been from an invalid clipboard_id or item_id
+                resp = {
+                    'success': False,
+                    'message': 'Failed to remove item from clipboard',
+                    'errors': [
+                        {
+                            'message': 'Clipboard ID or ID of item is invalid'
+                        }
+                    ]
+                }
+                return self.write(resp)
+            else:
+                resp = {
+                    'success': True,
+                    'message': 'Removed item from clipboard',
+                }
+                return self.write(resp)
+
+        except:
+            resp = {
+                'success': False,
+                'message': 'Failed to remove item from clipboard',
+                'errors': [
+                    {
+                        'message': 'Server error'
+                    }
+                ]
+            }
+            return self.write(resp)
 
 from tornado.options import define
 define("port", default=3300, type=int)
@@ -85,10 +215,9 @@ define("port", default=3300, type=int)
 handlers = [
     (r"/", Index),
     (r"/clipboard/([0-9a-z]+)", Clipboard),
-    (r"/clipboard/([0-9a-z]+)/items/([0-9a-z]+)", Item)
+    (r"/clipboard/([0-9a-z]+)/items/([0-9a-z]*)", Item)
 ]
 
-load_dotenv()
 
 # switch debug mode on or off
 try:
