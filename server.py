@@ -19,7 +19,7 @@ class BaseHandler(tornado.web.RequestHandler):
     clipboards = database['clipboards']
     
 class Index(BaseHandler):
-    def get(self):
+    async def get(self):
         resp = {
             "success": True,
             "message": "Clipboard API Root. https://clipboard-app.netlify.app",
@@ -47,7 +47,6 @@ class Clipboard(BaseHandler):
                 }
                 return self.write(resp)
             else:
-                print('creating new')
                 result = await self.clipboards.insert_one(
                     {'clipboard_id': clipboard_id, 'items': []}
                 )
