@@ -209,7 +209,7 @@ class Item(BaseHandler):
             return self.write(resp)
 
 from tornado.options import define
-define("port", default=3300, type=int)
+define("port", default="8080", type=str)
 
 handlers = [
     (r"/", Index),
