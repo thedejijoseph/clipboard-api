@@ -17,6 +17,15 @@ class BaseHandler(tornado.web.RequestHandler):
     client = MotorClient(os.getenv('MONGO_URI'))
     database = client['clipboard-app']
     clipboards = database['clipboards']
+
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "*")
+        self.set_header('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS')
+    
+    def options(self, *args):
+        self.set_status(204)
+        self.finish()
     
 class Index(BaseHandler):
     async def get(self):
@@ -76,7 +85,7 @@ class Clipboard(BaseHandler):
             result = await self.clipboards.delete_one({'clipboard_id': clipboard_id})
             if result.deleted_count:
                 resp = {
-                    'succss': True,
+                    'success': True,
                     'message': f'Deleted clipboard {clipboard_id}',
                 }
                 return self.write(resp)
