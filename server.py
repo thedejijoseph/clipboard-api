@@ -113,7 +113,7 @@ class Clipboard(BaseHandler):
             return self.write(resp)
 
 class Item(BaseHandler):
-    async def post(self, clipboard_id, item_id=None):
+    async def post(self, clipboard_id):
         
         try:
             data = json.loads(self.request.body)
@@ -168,7 +168,9 @@ class Item(BaseHandler):
             }
             return self.write(resp)
 
-    async def delete(self, clipboard_id, item_id):
+    async def delete(self, clipboard_id):
+        data = json.loads(self.request.body)
+        item_id = data.get('id', None)
         if not item_id:
             resp = {
                 'success': False,
@@ -223,7 +225,7 @@ define("port", default="8080", type=str)
 handlers = [
     (r"/", Index),
     (r"/clipboard/([0-9a-z]+)", Clipboard),
-    (r"/clipboard/([0-9a-z]+)/items/([0-9a-z]*)", Item)
+    (r"/clipboard/([0-9a-z]+)/items", Item)
 ]
 
 
